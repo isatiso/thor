@@ -1,0 +1,23 @@
+application:
+    template_path: templates
+    static_path: static
+    cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
+    debug: true
+
+httpserver:
+    xheaders: true
+
+server:
+    port: 6789
+    expire_time: 3600
+    back_ip: 127.0.0.1
+    cookie_name:
+        user_id: uuu
+        parameters: ppp
+
+mongo:
+    client: ''
+    db: ''
+    session_key: user_id
+
+debug: true
