@@ -34,6 +34,9 @@ STATUS = dict([
 
 
 def get_status_message(code):
+    if code == -1:
+        return None
+
     try:
         return STATUS[code]
     except KeyError:

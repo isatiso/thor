@@ -1,6 +1,7 @@
 # coding:utf-8
 """Convert YAML to Python Data."""
 import sys
+import os
 import json
 
 import yaml
@@ -9,10 +10,9 @@ from tornado.options import define, options
 from lib.arguments import Arguments
 
 define('port', default=0)
-define('env', default='test')
 
 options.parse_command_line()
-_ENV = options.env
+_ENV = os.getenv('suantao_env', 'mypc')
 
 
 class Config(Arguments):
@@ -50,7 +50,7 @@ class Config(Arguments):
 
 CFG = None
 try:
-    with open('config/config.yaml', 'r') as config:
+    with open('config/config.yaml', 'r', encoding='utf-8') as config:
         CFG = Config(yaml.load(config))
 except FileNotFoundError:
     CFG = Config(dict(error='Config File Not Found.'))

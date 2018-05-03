@@ -1,6 +1,6 @@
 # coding:utf-8
 
-from views.index import Index, Test
+from handlers.index import Index, Test
 
 INDEX_ROUTES = [
     (r'/', Index),

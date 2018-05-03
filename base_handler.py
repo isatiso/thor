@@ -109,49 +109,59 @@ class BaseHandler(RequestHandler, Mongo):
             pass
 
     @gen.coroutine
-    def check_auth(self, check_level=1):
+    def check_auth(self, **kwargs):
         """Check user status."""
         user_id = self.get_current_user()
         params = self.get_parameters()
 
-        def fail(code):
+        def clean_and_fail(code):
             self.set_current_user('')
             self.set_parameters({})
             self.fail(code)
 
         if not user_id or not params:
-            fail(3005)
+            clean_and_fail(3005)
 
         if user_id != params.user_id:
-            fail(3006)
+            clean_and_fail(3006)
 
         ac_code = yield self.get_session_code()
         if ac_code is not '' and params.ac_code != ac_code:
-            fail(3007)
+            clean_and_fail(3007)
+
+        for key in kwargs:
+            if params[key] != kwargs[key]:
+                dump_error(f'Auth Key Error: {key}')
+                self.fail(4003)
 
         self.set_current_user(self.get_current_user())
-        self.set_parameters(self.get_parameters().arguments)
+        self.set_parameters(self.get_parameters())
         return params
 
-    def parse_form_arguments(self, **keys):
+    def parse_form_arguments(self, *enforced_keys, **optional_keys):
         """Parse FORM argument like `get_argument`."""
         if O_O.debug:
             dump_in(f'Input: {self.request.method} {self.request.path}',
                     self.request.body.decode()[:500])
 
         req = dict()
-        for key in keys:
-            if keys[key] is ENFORCED:
-                req[key] = self.get_argument(key)
-            elif keys[key] is OPTIONAL:
-                req[key] = self.get_argument(key, None)
+        for key in enforced_keys:
+            req[key] = self.get_argument(key)
+        for key in optional_keys:
+            values = self.get_arguments(key)
+            if len(values) is 0:
+                req[key] = optional_keys.get(key)
+            elif len(values) is 1:
+                req[key] = values[0]
+            else:
+                req[key] = values
 
         req['remote_ip'] = self.request.remote_ip
         req['request_time'] = int(time.time())
 
         return Arguments(req)
 
-    def parse_json_arguments(self, **keys):
+    def parse_json_arguments(self, *enforced_keys, **optional_keys):
         """Parse JSON argument like `get_argument`."""
         if O_O.debug:
             dump_in(f'Input: {self.request.method} {self.request.path}',
@@ -167,8 +177,8 @@ class BaseHandler(RequestHandler, Mongo):
             dump_error(self.request.body.decode())
             raise ParseJSONError('Req should be a dictonary.')
 
-        for key in keys:
-            if keys[key] is ENFORCED and key not in req:
+        for key in enforced_keys:
+            if key not in req:
                 dump_error(self.request.body.decode())
                 raise MissingArgumentError(key)
 
@@ -182,10 +192,35 @@ class BaseHandler(RequestHandler, Mongo):
         self.set_header('Content-Type', 'application/json')
         if O_O.debug:
             dump_out(f'Output: {self.request.method} {self.request.path}',
-                     str(data))
+                     str(data['data']))
 
         raise Finish(json.dumps(data).encode())
 
-    # def pattern_match(self, pattern_name, string):
-    #     """Check given string."""
-    #     return re.match(self.pattern[pattern_name], string)
+    @gen.coroutine
+    def wait(self, func, worker_mode=True, args=None, kwargs=None):
+        """Method to waiting celery result."""
+        if worker_mode:
+            async_task = func.apply_async(args=args, kwargs=kwargs)
+
+            while True:
+                if async_task.status in ['PENDING', 'PROGRESS']:
+                    yield gen.sleep(O_O.celery.sleep_time)
+                elif async_task.status in ['SUCCESS', 'FAILURE']:
+                    break
+                else:
+                    print('\n\nUnknown status:\n', async_task.status, '\n\n\n')
+                    break
+
+            if async_task.status != 'SUCCESS':
+                dump_error(f'Task Failed: {func.name}[{async_task.task_id}]',
+                           f'    {str(async_task.result)}')
+                result = dict(status=1, data=async_task.result)
+            else:
+                result = async_task.result
+
+            if result.get('status'):
+                self.fail(-1, result)
+            else:
+                return result
+        else:
+            return func(*args, **kwargs)

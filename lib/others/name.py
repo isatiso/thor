@@ -1,5 +1,5 @@
 # coding:utf-8
-"""Convert between underline and camel."""
+"""Convert between underline and camel.(暂时没用)"""
 
 import re
 

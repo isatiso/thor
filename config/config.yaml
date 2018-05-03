@@ -8,16 +8,25 @@ httpserver:
     xheaders: true
 
 server:
+    domain: 'localhost'
     port: 6789
     expire_time: 3600
-    back_ip: 127.0.0.1
+    back_ip: '127.0.0.1'
+    pass_mixin: '0x00544'
     cookie_name:
-        user_id: uuu
-        parameters: ppp
+        user_id: u_u
+        parameters: o_o
 
-mongo:
-    client: ''
-    db: ''
-    session_key: user_id
+celery:
+    backend: 'redis://:<passwd>@<host>:<port>/<db_num>'
+    broker: 'pyamqp://<user_name>:<passwd>@<host>:<port>/<virtual_host>'
+    sleep_time: 0.05
+
+database:
+    mysql: 'mysql+mysqldb://<user_name>:<passwd>@<host>:<port>/<db_name>?charset=utf8'
+    mongo:
+        client: 'mongodb://<user_name>:<passwd>@<host>:<port>/<auth_db_name>'
+        db: '<db_name>'
+        session_key: user_id
 
 debug: true
