@@ -17,6 +17,9 @@ server:
         user_id: u_u
         parameters: o_o
 
+worker:
+    mode: false
+
 celery:
     backend: 'redis://:<passwd>@<host>:<port>/<db_num>'
     broker: 'pyamqp://<user_name>:<passwd>@<host>:<port>/<virtual_host>'
