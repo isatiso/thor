@@ -5,7 +5,8 @@ from pymongo import MongoClient
 
 from config import CFG as config
 
-M_CLIENT = MongoClient(config.mongo.client).__getattr__(config.mongo.db)
+M_CLIENT = MongoClient(
+    config.database.mongo.client).__getattr__(config.database.mongo.db)
 
 SESSION = M_CLIENT.session
 
