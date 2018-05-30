@@ -54,9 +54,9 @@ class BaseHandler(RequestHandler, Mongo):
 
     @gen.coroutine
     def get_session_code(self):
-        if O_O.mongo:
+        if O_O.database.mongo:
             sess_info = self.session.find_one({
-                O_O.mongo.session_key:
+                O_O.database.mongo.session_key:
                 self.request.remote_ip
             })
             return sess_info and sess_info.get('session_code')
@@ -192,7 +192,7 @@ class BaseHandler(RequestHandler, Mongo):
         self.set_header('Content-Type', 'application/json')
         if O_O.debug:
             dump_out(f'Output: {self.request.method} {self.request.path}',
-                     str(data['data']))
+                     json.dumps(data))
 
         raise Finish(json.dumps(data).encode())
 
