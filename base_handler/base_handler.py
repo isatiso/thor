@@ -3,72 +3,32 @@
 import json
 import re
 import time
+import jwt
+import functools
 
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler
-from models import Mongo
+
 from config import get_status_message, CFG as O_O
 from lib.arguments import Arguments
 from lib.errors import ParseJSONError
 from lib.logger import dump_in, dump_out, dump_error
+from lib.utils import extract_anywhere_keys
 
 ENFORCED = True
 OPTIONAL = False
 
 
-class BaseHandler(RequestHandler, Mongo):
+class BaseHandler(RequestHandler):
     """Custom handler for other views module."""
 
     def __init__(self, application, request, **kwargs):
         super(BaseHandler, self).__init__(application, request, **kwargs)
         self.params = None
 
-    def get_current_user(self):
-        """Get current user from cookie.
-        p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
-        user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
-        return user_id and user_id.decode()
-
-    def set_current_user(self, user_id=''):
-        """Set current user to cookie."""
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.user_id,
-            value=user_id,
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
-
-    def get_parameters(self):
-        """Get user information from cookie."""
-        params = self.get_secure_cookie(O_O.server.cookie_name.parameters)
-        return Arguments(params and json.loads(params.decode()))
-
-    def set_parameters(self, params=''):
-        """Set user information to the cookie."""
-        if not isinstance(params, dict):
-            raise ValueError('params should be <class \'dict\'>')
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.parameters,
-            value=json.dumps(params),
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
-
-    @gen.coroutine
-    def get_session_code(self):
-        if O_O.database.mongo:
-            sess_info = self.session.find_one({
-                O_O.database.mongo.session_key:
-                self.request.remote_ip
-            })
-            return sess_info and sess_info.get('session_code')
-
-        return ''
-
-    @gen.coroutine
-    def set_session_code(self, code):
-        pass
-
     def fail(self, status, data=None, polyfill=None, **_kwargs):
         """assemble and return error data."""
+
         msg = get_status_message(status)
         self.finish_with_json(
             dict(status=status, msg=msg, data=data, **_kwargs))
@@ -108,36 +68,6 @@ class BaseHandler(RequestHandler, Mongo):
         except json.JSONDecodeError:
             pass
 
-    @gen.coroutine
-    def check_auth(self, **kwargs):
-        """Check user status."""
-        user_id = self.get_current_user()
-        params = self.get_parameters()
-
-        def clean_and_fail(code):
-            self.set_current_user('')
-            self.set_parameters({})
-            self.fail(code)
-
-        if not user_id or not params:
-            clean_and_fail(3005)
-
-        if user_id != params.user_id:
-            clean_and_fail(3006)
-
-        ac_code = yield self.get_session_code()
-        if ac_code is not '' and params.ac_code != ac_code:
-            clean_and_fail(3007)
-
-        for key in kwargs:
-            if params[key] != kwargs[key]:
-                dump_error(f'Auth Key Error: {key}')
-                self.fail(4003)
-
-        self.set_current_user(self.get_current_user())
-        self.set_parameters(self.get_parameters())
-        return params
-
     def parse_form_arguments(self, *enforced_keys, **optional_keys):
         """Parse FORM argument like `get_argument`."""
         if O_O.debug:
@@ -160,6 +90,9 @@ class BaseHandler(RequestHandler, Mongo):
         req['request_time'] = int(time.time())
 
         return Arguments(req)
+
+    def bind_params(self, params, options=['user_id', 'email', 'register_time', 'permission', 'first_name', 'last_name', 'company', 'title', 'country', 'avatar', 'industry', 'login_inc', 'expire_time']):
+        return extract_anywhere_keys(params, options)
 
     def parse_json_arguments(self, *enforced_keys, **optional_keys):
         """Parse JSON argument like `get_argument`."""
@@ -197,30 +130,33 @@ class BaseHandler(RequestHandler, Mongo):
         raise Finish(json.dumps(data).encode())
 
     @gen.coroutine
-    def wait(self, func, worker_mode=True, args=None, kwargs=None):
+    def wait(self, func, worker_mode=True, waiting=True, args=None, kwargs=None):
         """Method to waiting celery result."""
         if worker_mode:
             async_task = func.apply_async(args=args, kwargs=kwargs)
+            if waiting:
+                while True:
+                    if async_task.status in ['PENDING', 'PROGRESS']:
+                        yield gen.sleep(O_O.celery.sleep_time)
+                    elif async_task.status in ['SUCCESS', 'FAILURE']:
+                        break
+                    else:
+                        print('\n\nUnknown status:\n',
+                              async_task.status, '\n\n\n')
+                        break
 
-            while True:
-                if async_task.status in ['PENDING', 'PROGRESS']:
-                    yield gen.sleep(O_O.celery.sleep_time)
-                elif async_task.status in ['SUCCESS', 'FAILURE']:
-                    break
+                if async_task.status != 'SUCCESS':
+                    dump_error(f'Task Failed: {func.name}[{async_task.task_id}]',
+                               f'    {str(async_task.result)}')
+                    result = dict(status=1, data=async_task.result)
                 else:
-                    print('\n\nUnknown status:\n', async_task.status, '\n\n\n')
-                    break
+                    result = async_task.result
 
-            if async_task.status != 'SUCCESS':
-                dump_error(f'Task Failed: {func.name}[{async_task.task_id}]',
-                           f'    {str(async_task.result)}')
-                result = dict(status=1, data=async_task.result)
+                if result.get('status'):
+                    self.fail(-1, result)
+                else:
+                    return result
             else:
-                result = async_task.result
-
-            if result.get('status'):
-                self.fail(-1, result)
-            else:
-                return result
+                return dict(status=1, data=async_task.id)
         else:
             return func(*args, **kwargs)

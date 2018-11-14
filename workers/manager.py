@@ -20,9 +20,9 @@ DB_ENGINE = create_engine(
 SESS = sessionmaker(bind=DB_ENGINE)
 
 QUEUE_LIST = {
-    'message': (5, 'gevent', 'info'),
-    'db': (100, 'gevent', 'info'),
-    'oss': (5, 'gevent', 'info'),
+    # 'message': (5, 'gevent', 'info'),
+    'database': (20, 'gevent', 'info'),
+    # 'oss': (5, 'gevent', 'info'),
 }
 
 APP = Celery(

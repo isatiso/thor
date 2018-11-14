@@ -3,12 +3,12 @@
 import time
 from tornado import web, gen
 
-from base_handler import BaseAuthHandler
+from base_handler import BaseHandler
 
 from config import CFG as O_O
 
 
-class Index(BaseAuthHandler):
+class Index(BaseHandler):
     """Test index request handler."""
 
     @web.asynchronous
@@ -18,7 +18,7 @@ class Index(BaseAuthHandler):
         self.render('index.html')
 
 
-class Test(BaseAuthHandler):
+class Test(BaseHandler):
     """Test method."""
 
     @web.asynchronous

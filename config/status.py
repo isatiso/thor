@@ -19,13 +19,21 @@ STATUS = dict([
     (3031, 'Not Regular Password'),
     (3032, 'Not Regular Email'),
     (3033, 'Not Regular Nickname'),
-    (3100, 'Permission Deny.'),
+    # (3100, 'Permission Deny.'),
     (3104, 'Chat Not Exists.'),
     (3105, 'Can not enter this chat.'),
     (3106, 'Chat owner missed.'),
     (3150, 'Chat Member Exists.'),
     (3151, 'Chat Member Not Exists.'),
     (3152, 'No Message Found.'),
+
+    (3401, 'invalid header authorization '),
+    (3402, 'The authorization code has expired'),
+    (3403, 'The authorization out of issue'),
+
+    (3999, 'result is not 1.'),
+    (4000, 'Invalid access.'),
+
     (4003, 'Permission Denied.'),
     (4004, 'Not Found Error.'),
     (4005, 'Permission Error.'),
@@ -34,9 +42,11 @@ STATUS = dict([
 
 
 def get_status_message(code):
+    if not isinstance(code, int):
+        code = int(code)
+        
     if code == -1:
         return None
-
     try:
         return STATUS[code]
     except KeyError:
