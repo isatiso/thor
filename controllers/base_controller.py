@@ -6,7 +6,6 @@ import time
 
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler
-from models import Mongo
 from config import get_status_message, CFG as O_O
 from lib.arguments import Arguments
 from lib.errors import ParseJSONError
@@ -16,11 +15,11 @@ ENFORCED = True
 OPTIONAL = False
 
 
-class BaseHandler(RequestHandler, Mongo):
+class BaseController(RequestHandler):
     """Custom handler for other views module."""
 
     def __init__(self, application, request, **kwargs):
-        super(BaseHandler, self).__init__(application, request, **kwargs)
+        super(BaseController, self).__init__(application, request, **kwargs)
         self.params = None
 
     def get_current_user(self):
@@ -51,21 +50,6 @@ class BaseHandler(RequestHandler, Mongo):
             value=json.dumps(params),
             expires=time.time() + O_O.server.expire_time,
             domain=self.request.host)
-
-    @gen.coroutine
-    def get_session_code(self):
-        if O_O.database.mongo:
-            sess_info = self.session.find_one({
-                O_O.database.mongo.session_key:
-                self.request.remote_ip
-            })
-            return sess_info and sess_info.get('session_code')
-
-        return ''
-
-    @gen.coroutine
-    def set_session_code(self, code):
-        pass
 
     def fail(self, status, data=None, polyfill=None, **_kwargs):
         """assemble and return error data."""
@@ -124,10 +108,6 @@ class BaseHandler(RequestHandler, Mongo):
 
         if user_id != params.user_id:
             clean_and_fail(3006)
-
-        ac_code = yield self.get_session_code()
-        if ac_code is not '' and params.ac_code != ac_code:
-            clean_and_fail(3007)
 
         for key in kwargs:
             if params[key] != kwargs[key]:
