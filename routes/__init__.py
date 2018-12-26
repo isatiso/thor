@@ -1,8 +1,4 @@
 # coding:utf-8
 """Routes Module."""
 
-from .index_routes import INDEX_ROUTES
-
-ROUTES = sum([
-    INDEX_ROUTES
-], [])
+from .route_module import ROUTES, route

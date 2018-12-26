@@ -4,10 +4,11 @@ import time
 from tornado import web, gen
 
 from .base_controller import BaseController
-
+from routes.route_module import route
 from config import CFG as O_O
 
 
+@route(r'/')
 class Index(BaseController):
     """Test index request handler."""
 
@@ -18,6 +19,7 @@ class Index(BaseController):
         self.render('index.html')
 
 
+@route(r'/test(?P<path>.*)?')
 class Test(BaseController):
     """Test method."""
 
