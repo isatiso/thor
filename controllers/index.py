@@ -1,7 +1,7 @@
 # coding:utf-8
 """Handlers."""
 import time
-from tornado import web, gen
+from tornado import gen
 
 from .base_controller import BaseController
 from routes.route_module import route
@@ -12,9 +12,7 @@ from config import CFG as O_O
 class Index(BaseController):
     """Test index request handler."""
 
-    @web.asynchronous
-    @gen.coroutine
-    def get(self, *_args, **_kwargs):
+    async def get(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
         self.render('index.html')
 
@@ -23,9 +21,7 @@ class Index(BaseController):
 class Test(BaseController):
     """Test method."""
 
-    @web.asynchronous
-    @gen.coroutine
-    def get(self, *_args, **_kwargs):
+    async def get(self, *_args, **_kwargs):
         """Test GET."""
         res = dict(method='GET', path=_kwargs.get('path'), time=time.time())
         # print(self.request.body[:200])
