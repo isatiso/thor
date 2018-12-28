@@ -7,7 +7,7 @@ import json
 import yaml
 from tornado.options import define, options
 
-from lib.arguments import Arguments
+from . import Arguments
 
 define('port', default=0)
 
@@ -50,7 +50,7 @@ class Config(Arguments):
 
 CFG = None
 try:
-    with open('config/config.yaml', 'r', encoding='utf-8') as config:
+    with open('thor/config/config.yaml', 'r', encoding='utf-8') as config:
         CFG = Config(yaml.load(config))
 except FileNotFoundError:
     CFG = Config(dict(error='Config File Not Found.'))

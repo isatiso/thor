@@ -3,12 +3,10 @@
 
 import time
 from tornado import gen
-
-from routes.route_module import route
+from tornado.options import define
 from config import CFG as O_O
 
-from . import index
-from .base_controller import BaseController
+from lib.web import BaseController, route
 
 
 @route(r'/')

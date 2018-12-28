@@ -3,6 +3,8 @@
 import json
 import re
 import time
+import traceback
+import os
 
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler
@@ -13,6 +15,28 @@ from lib.logger import dump_in, dump_out, dump_error
 
 ENFORCED = True
 OPTIONAL = False
+
+ROUTES = []
+
+
+def route(path: str):
+    def wrapper(handler: RequestHandler):
+        if not issubclass(handler, RequestHandler):
+            raise PermissionError('Cant routing a nonhandler class.')
+
+        filename = traceback.extract_stack(limit=2)[0].filename
+        filename = os.path.basename(filename)
+        filename = os.path.splitext(filename)[0]
+        filename = '' if filename == 'index' else filename
+
+        realpath = path.strip('/')
+        realpath = '/' + f'{filename}/{realpath}'.strip('/')
+
+        ROUTES.append((realpath, handler))
+
+        return handler
+
+    return wrapper
 
 
 class BaseController(RequestHandler):
@@ -61,8 +85,12 @@ class BaseController(RequestHandler):
         """assemble and return error data."""
         self.finish_with_json(dict(status=0, msg=msg, data=data))
 
-
-    async def fetch(self, api, method='GET', body=None, headers=None, **_kwargs):
+    async def fetch(self,
+                    api,
+                    method='GET',
+                    body=None,
+                    headers=None,
+                    **_kwargs):
         """Fetch Info from backend."""
         body = body or dict()
 
@@ -91,7 +119,6 @@ class BaseController(RequestHandler):
             return Arguments(json.loads(res_body))
         except json.JSONDecodeError:
             pass
-
 
     async def check_auth(self, **kwargs):
         """Check user status."""
