@@ -6,4 +6,4 @@ from lib import Arguments
 from .config import CFG, _ENV
 from .status import get_status_message
 
-print(Arguments)
+# print(Arguments)

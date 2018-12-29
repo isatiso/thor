@@ -3,7 +3,7 @@ application:
     static_path: static
     cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
     debug: true
-    autoreload: false
+    # autoreload: false
 
 httpserver:
     xheaders: true
