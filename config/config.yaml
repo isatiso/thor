@@ -3,6 +3,7 @@ application:
     static_path: static
     cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
     debug: true
+    # autoreload: false
 
 httpserver:
     xheaders: true
@@ -33,3 +34,6 @@ database:
         session_key: user_id
 
 debug: true
+
+enabled_modules:
+    - 'lazor'

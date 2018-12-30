@@ -3,6 +3,8 @@
 import json
 import re
 import time
+import traceback
+import os
 
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler
@@ -13,6 +15,28 @@ from lib.logger import dump_in, dump_out, dump_error
 
 ENFORCED = True
 OPTIONAL = False
+
+ROUTES = []
+
+
+def route(path: str):
+    def wrapper(handler: RequestHandler):
+        if not issubclass(handler, RequestHandler):
+            raise PermissionError('Cant routing a nonhandler class.')
+
+        filename = traceback.extract_stack(limit=2)[0].filename
+        filename = os.path.basename(filename)
+        filename = os.path.splitext(filename)[0]
+        filename = '' if filename == 'index' else filename
+
+        realpath = path.strip('/')
+        realpath = '/' + f'{filename}/{realpath}'.strip('/')
+
+        ROUTES.append((realpath, handler))
+
+        return handler
+
+    return wrapper
 
 
 class BaseController(RequestHandler):
@@ -61,8 +85,12 @@ class BaseController(RequestHandler):
         """assemble and return error data."""
         self.finish_with_json(dict(status=0, msg=msg, data=data))
 
-    @gen.coroutine
-    def fetch(self, api, method='GET', body=None, headers=None, **_kwargs):
+    async def fetch(self,
+                    api,
+                    method='GET',
+                    body=None,
+                    headers=None,
+                    **_kwargs):
         """Fetch Info from backend."""
         body = body or dict()
 
@@ -73,7 +101,7 @@ class BaseController(RequestHandler):
         if '://' not in api:
             api = f'http://{O_O.server.back_ip}{api}'
 
-        back_info = yield httpclient.AsyncHTTPClient().fetch(
+        back_info = await httpclient.AsyncHTTPClient().fetch(
             api,
             method=method,
             headers=_headers,
@@ -92,8 +120,7 @@ class BaseController(RequestHandler):
         except json.JSONDecodeError:
             pass
 
-    @gen.coroutine
-    def check_auth(self, **kwargs):
+    async def check_auth(self, **kwargs):
         """Check user status."""
         user_id = self.get_current_user()
         params = self.get_parameters()
@@ -176,15 +203,14 @@ class BaseController(RequestHandler):
 
         raise Finish(json.dumps(data).encode())
 
-    @gen.coroutine
-    def wait(self, func, worker_mode=True, args=None, kwargs=None):
+    async def wait(self, func, worker_mode=True, args=None, kwargs=None):
         """Method to waiting celery result."""
         if worker_mode:
             async_task = func.apply_async(args=args, kwargs=kwargs)
 
             while True:
                 if async_task.status in ['PENDING', 'PROGRESS']:
-                    yield gen.sleep(O_O.celery.sleep_time)
+                    await gen.sleep(O_O.celery.sleep_time)
                 elif async_task.status in ['SUCCESS', 'FAILURE']:
                     break
                 else:

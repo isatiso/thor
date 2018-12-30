@@ -1,21 +1,29 @@
 #!/usr/local/bin/python3
 # coding:utf-8
 """Main Module."""
+import sys
 
-from tornado import httpserver, ioloop, web
+from tornado import httpserver, ioloop, web, gen
+from tornado.options import options
 
 from config import CFG as O_O
-from routes import ROUTES as routes
+from lib.web import ROUTES
+
+import controller
 
 
 def main():
     """Entrance Function"""
+    controller.load_subcontroller()
 
-    tornado_app = web.Application(handlers=routes, **O_O.application)
+    for r in ROUTES:
+        print(f'{r[0]:30s} {r[1]}')
+
+    tornado_app = web.Application(handlers=ROUTES, **O_O.application)
     tornado_server = httpserver.HTTPServer(tornado_app, **O_O.httpserver)
 
     tornado_server.listen(O_O.server.port)
-    print('start listen...')
+    print('\nstart listen...')
     O_O.show()
 
     ioloop.IOLoop.instance().start()
