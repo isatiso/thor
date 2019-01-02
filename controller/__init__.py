@@ -3,7 +3,9 @@
 import importlib
 import pkgutil
 
+module_dict = dict()
+
 
 def load_subcontroller():
     for m in pkgutil.iter_modules(__spec__.submodule_search_locations):
-        importlib.import_module('controller.' + m.name)
+        module_dict[m.name] = importlib.import_module('controller.' + m.name)

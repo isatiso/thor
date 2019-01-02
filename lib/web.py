@@ -33,6 +33,7 @@ def route(path: str):
         realpath = '/' + f'{filename}/{realpath}'.strip('/')
 
         ROUTES.append((realpath, handler))
+        print('loaded', realpath)
 
         return handler
 

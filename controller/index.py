@@ -18,6 +18,16 @@ class Index(BaseController):
         self.render('index.html')
 
 
+@route(r'/reload_module')
+class ReloadModule(BaseController):
+    """Test index request handler."""
+
+    async def get(self, *_args, **_kwargs):
+        """Get method of IndexHandler."""
+        module = self.get_argument('module', '')
+        self.write('index.htmlaefaefefe')
+
+
 @route(r'/test(?P<path>.*)?')
 class Test(BaseController):
     """Test method."""

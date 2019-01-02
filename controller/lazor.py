@@ -15,7 +15,7 @@ class Index(BaseController):
 
     async def get(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
-        self.render('index.html')
+        self.finish('654')
 
 
 @route(r'/test(?P<path>.*)?')
