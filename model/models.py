@@ -2,25 +2,62 @@
 """Lazor Database Module."""
 import uuid
 import enum
+from datetime import datetime
+from sqlalchemy.ext.declarative import declarative_base
 
 from sqlalchemy import (CHAR, BigInteger, Column, Enum, Integer, SmallInteger,
                         Text, String, Numeric, Float, TIMESTAMP)
 from sqlalchemy import PrimaryKeyConstraint, Sequence, UniqueConstraint
 from sqlalchemy import func, text
 
-from .model_base import BASE
+BASE = declarative_base()
 
 
-class User(BASE):
+class Addition:
+
+    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=text('CURRENT_TIMESTAMP  ON UPDATE CURRENT_TIMESTAMP'))
+
+    def to_dict(self, *options, **alias):
+        res = dict()
+        for key in options:
+            alias[key] = None
+
+        for key in self.__dict__:
+            if not alias or key in alias:
+                if not key.startswith('_'):
+                    if isinstance(alias.get(key), str):
+                        real_key = alias[key]
+                    else:
+                        real_key = key
+                    if isinstance(self.__dict__[key], enum.Enum):
+                        res[real_key] = self.__dict__[key].name
+                    elif isinstance(self.__dict__[key], datetime):
+                        res[real_key] = int(self.__dict__[key].timestamp())
+                    else:
+                        res[real_key] = self.__dict__[key]
+
+        return res
+
+
+class User(BASE, Addition):
     """User Model."""
     __tablename__ = 'user'
 
-    user_id = Column(Integer, primary_key=True)
-    mail = Column(String(120), comment='用户邮箱', index=True)
-    user_name = Column(String(10), comment='用户名', index=True)
-    password = Column(CHAR(32), comment='密码')
+    user_id = Column(Integer)
+    mail = Column(String(120), index=True)
+    phone = Column(String(20), index=True)
+    username = Column(String(10), index=True)
+    password = Column(CHAR(32), )
 
-    is_super = Column(SmallInteger, default=0, nullable=False)
-    active = Column(SmallInteger, default=0, nullable=False)
+    is_super = Column(SmallInteger, server_default=text('0'))
+    active = Column(SmallInteger, server_default=text('0'))
 
-    __table_args__ = ({'mysql_engine': 'InnoDB'}, )
+    __table_args__ = (
+        PrimaryKeyConstraint('user_id'),
+        {
+            'mysql_engine': 'InnoDB'
+        },
+    )

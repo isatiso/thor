@@ -13,9 +13,6 @@ from lib.arguments import Arguments
 from lib.errors import ParseJSONError
 from lib.logger import dump_in, dump_out, dump_error
 
-ENFORCED = True
-OPTIONAL = False
-
 ROUTES = []
 
 
