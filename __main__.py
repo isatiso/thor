@@ -9,12 +9,12 @@ from tornado.options import options
 from config import CFG as O_O
 from lib.web import ROUTES
 
-import controller
+import controllers
 
 
 def main():
     """Entrance Function"""
-    controller.load_subcontroller()
+    controllers.load_controllers()
 
     for r in ROUTES:
         print(f'{r[0]:30s} {r[1]}')

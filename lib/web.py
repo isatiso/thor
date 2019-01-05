@@ -9,9 +9,8 @@ import os
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler
 from config import get_status_message, CFG as O_O
-from lib.arguments import Arguments
-from lib.errors import ParseJSONError
-from lib.logger import dump_in, dump_out, dump_error
+from lib.entity import Arguments, ParseJSONError
+from lib.utils import dump_in, dump_out, dump_error
 
 ROUTES = []
 
@@ -44,34 +43,34 @@ class BaseController(RequestHandler):
         super(BaseController, self).__init__(application, request, **kwargs)
         self.params = None
 
-    def get_current_user(self):
-        """Get current user from cookie.
-        p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
-        user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
-        return user_id and user_id.decode()
+    # def get_current_user(self):
+    #     """Get current user from cookie.
+    #     p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
+    #     user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
+    #     return user_id and user_id.decode()
 
-    def set_current_user(self, user_id=''):
-        """Set current user to cookie."""
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.user_id,
-            value=user_id,
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
+    # def set_current_user(self, user_id=''):
+    #     """Set current user to cookie."""
+    #     self.set_secure_cookie(
+    #         name=O_O.server.cookie_name.user_id,
+    #         value=user_id,
+    #         expires=time.time() + O_O.server.expire_time,
+    #         domain=self.request.host)
 
-    def get_parameters(self):
-        """Get user information from cookie."""
-        params = self.get_secure_cookie(O_O.server.cookie_name.parameters)
-        return Arguments(params and json.loads(params.decode()))
+    # def get_parameters(self):
+    #     """Get user information from cookie."""
+    #     params = self.get_secure_cookie(O_O.server.cookie_name.parameters)
+    #     return Arguments(params and json.loads(params.decode()))
 
-    def set_parameters(self, params=''):
-        """Set user information to the cookie."""
-        if not isinstance(params, dict):
-            raise ValueError('params should be <class \'dict\'>')
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.parameters,
-            value=json.dumps(params),
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
+    # def set_parameters(self, params=''):
+    #     """Set user information to the cookie."""
+    #     if not isinstance(params, dict):
+    #         raise ValueError('params should be <class \'dict\'>')
+    #     self.set_secure_cookie(
+    #         name=O_O.server.cookie_name.parameters,
+    #         value=json.dumps(params),
+    #         expires=time.time() + O_O.server.expire_time,
+    #         domain=self.request.host)
 
     def fail(self, status, data=None, polyfill=None, **_kwargs):
         """assemble and return error data."""
@@ -79,7 +78,7 @@ class BaseController(RequestHandler):
         self.finish_with_json(
             dict(status=status, msg=msg, data=data, **_kwargs))
 
-    def success(self, msg='Successfully.', data=None, **_kwargs):
+    def success(self, data=None, msg='Successfully.', **_kwargs):
         """assemble and return error data."""
         self.finish_with_json(dict(status=0, msg=msg, data=data))
 
@@ -118,30 +117,51 @@ class BaseController(RequestHandler):
         except json.JSONDecodeError:
             pass
 
-    async def check_auth(self, **kwargs):
-        """Check user status."""
-        user_id = self.get_current_user()
-        params = self.get_parameters()
+    # @gen.coroutine
+    # def check_auth(self, **kwargs):
+    #     """Check user status."""
 
-        def clean_and_fail(code):
-            self.set_current_user('')
-            self.set_parameters({})
-            self.fail(code)
+    #     super_access = self.get_argument('super_access', '')
+    #     if super_access == '0x00544':
+    #         return Arguments(dict(super_access=super_access))
 
-        if not user_id or not params:
-            clean_and_fail(3005)
+    #     token = self.get_argument('token', '')
+    #     device = self.get_argument('device', 'web')
+    #     lang = self.get_argument('lang', 'cn').lower()
 
-        if user_id != params.user_id:
-            clean_and_fail(3006)
+    #     user_id = token_bar.get_token(token, device=device_num)
+    #     if not user_id:
+    #         self.fail(1001)
+    #     token_bar.set_token(token, user_id, xx=True, device=device_num)
 
-        for key in kwargs:
-            if params[key] != kwargs[key]:
-                dump_error(f'Auth Key Error: {key}')
-                self.fail(4003)
+    #     params = yield self.get_user_info(user_id)
 
-        self.set_current_user(self.get_current_user())
-        self.set_parameters(self.get_parameters())
-        return params
+    #     if not params:
+    #         self.fail(1001)
+    #     params['token'] = token
+    #     params['device'] = device_num
+    #     params['lang'] = lang
+
+    #     for key in kwargs:
+    #         if key not in params:
+    #             dump_error('Exception:\n', f'Auth Key Error: {key}')
+    #             self.fail(403, data=dict())
+
+    #         if not isinstance(kwargs[key], list):
+    #             if params[key] != kwargs[key]:
+    #                 dump_error('Exception:\n', f'Auth Key Error: {key}')
+    #                 self.fail(403, data=dict())
+    #         else:
+    #             operator = kwargs[key][0]
+    #             value = kwargs[key][1]
+
+    #             if not OPERATORS[operator](params[key], value):
+    #                 dump_error('Exception:\n', f'Auth Key Error: {key}')
+    #                 self.fail(400, data=dict())
+
+    #     result = Arguments(params)
+    #     self.params = result
+    #     return result
 
     def parse_form_arguments(self, *enforced_keys, **optional_keys):
         """Parse FORM argument like `get_argument`."""
