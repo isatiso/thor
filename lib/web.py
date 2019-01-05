@@ -43,6 +43,16 @@ class BaseController(RequestHandler):
         super(BaseController, self).__init__(application, request, **kwargs)
         self.params = None
 
+    # @web.asynchronous
+    # @gen.coroutine
+    async def options(self, *_args, **_kwargs):
+        self.set_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE')
+        self.set_header('Access-Control-Allow-Headers', 'Authorization')
+        self.success()
+
+    def prepare(self):
+        self.set_header('Access-Control-Allow-Origin', '*')
+
     # def get_current_user(self):
     #     """Get current user from cookie.
     #     p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""

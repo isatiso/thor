@@ -15,6 +15,7 @@ class Index(BaseController):
 
     async def get(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
+        print(self.request.headers)
         self.render('index.html')
 
 
@@ -25,11 +26,6 @@ class Test(BaseController):
     async def get(self, *_args, **_kwargs):
         """Test GET."""
         res = dict(method='GET', path=_kwargs.get('path'), time=time.time())
-        # print(self.request.body[:200])
-        print('cookie', self.get_current_user(), self.get_parameters())
-        self.set_current_user('kjhkjhkjhkjh')
-        self.set_parameters(dict(a=1, b=2, c=4))
-
         self.finish_with_json(res)
 
     def post(self, *_args, **_kwargs):

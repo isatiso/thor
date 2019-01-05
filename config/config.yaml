@@ -1,5 +1,5 @@
 application:
-    template_path: templates
+    template_path: thor/templates
     static_path: static
     cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
     debug: true
