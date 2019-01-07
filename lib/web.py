@@ -6,8 +6,12 @@ import time
 import traceback
 import os
 
+from urllib import parse
+
 from tornado import gen, httpclient
-from tornado.web import Finish, MissingArgumentError, RequestHandler
+from tornado.web import Finish, MissingArgumentError, RequestHandler, HTTPError
+from tornado.log import app_log, gen_log
+
 from config import get_status_message, CFG as O_O
 from lib.entity import Arguments, ParseJSONError
 from lib.utils import dump_in, dump_out, dump_error
@@ -18,7 +22,7 @@ ROUTES = []
 def route(path: str):
     def wrapper(handler: RequestHandler):
         if not issubclass(handler, RequestHandler):
-            raise PermissionError('Cant routing a nonhandler class.')
+            raise PermissionError('Can\'t routing a nonhandler class.')
 
         filename = traceback.extract_stack(limit=2)[0].filename
         filename = os.path.basename(filename)
@@ -43,8 +47,33 @@ class BaseController(RequestHandler):
         super(BaseController, self).__init__(application, request, **kwargs)
         self.params = None
 
-    # @web.asynchronous
-    # @gen.coroutine
+    def _request_summary(self):
+        s = ' '
+        return f'{self.request.method.rjust(6, s)} {self.request.remote_ip.rjust(15, s)}  {self.request.path} '
+
+    def log_exception(self, typ, value, tb):
+        """Override to customize logging of uncaught exceptions.
+
+        By default logs instances of `HTTPError` as warnings without
+        stack traces (on the ``tornado.general`` logger), and all
+        other exceptions as errors with stack traces (on the
+        ``tornado.application`` logger).
+
+        .. versionadded:: 3.1
+        """
+        if isinstance(value, HTTPError):
+            if value.log_message:
+                # format = "%d %s: " + value.log_message
+                # args = ([value.status_code,
+                #          self._request_summary()] + list(value.args))
+                gen_log.warning('\033[0;31m' + value.log_message + '\033[0m')
+        else:
+            app_log.error(
+                "Uncaught exception %s\n%r",
+                self._request_summary(),
+                self.request,
+                exc_info=(typ, value, tb))
+
     async def options(self, *_args, **_kwargs):
         self.set_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE')
         self.set_header('Access-Control-Allow-Headers', 'Authorization')
@@ -53,19 +82,19 @@ class BaseController(RequestHandler):
     def prepare(self):
         self.set_header('Access-Control-Allow-Origin', '*')
 
-    # def get_current_user(self):
-    #     """Get current user from cookie.
-    #     p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
-    #     user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
-    #     return user_id and user_id.decode()
+    def get_current_user(self):
+        """Get current user from cookie.
+        p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
+        user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
+        return user_id and user_id.decode()
 
-    # def set_current_user(self, user_id=''):
-    #     """Set current user to cookie."""
-    #     self.set_secure_cookie(
-    #         name=O_O.server.cookie_name.user_id,
-    #         value=user_id,
-    #         expires=time.time() + O_O.server.expire_time,
-    #         domain=self.request.host)
+    def set_current_user(self, user_id=''):
+        """Set current user to cookie."""
+        self.set_secure_cookie(
+            name=O_O.server.cookie_name.user_id,
+            value=user_id,
+            expires=time.time() + O_O.server.expire_time,
+            domain=self.request.host)
 
     # def get_parameters(self):
     #     """Get user information from cookie."""
@@ -81,16 +110,6 @@ class BaseController(RequestHandler):
     #         value=json.dumps(params),
     #         expires=time.time() + O_O.server.expire_time,
     #         domain=self.request.host)
-
-    def fail(self, status, data=None, polyfill=None, **_kwargs):
-        """assemble and return error data."""
-        msg = get_status_message(status)
-        self.finish_with_json(
-            dict(status=status, msg=msg, data=data, **_kwargs))
-
-    def success(self, data=None, msg='Successfully.', **_kwargs):
-        """assemble and return error data."""
-        self.finish_with_json(dict(status=0, msg=msg, data=data))
 
     async def fetch(self,
                     api,
@@ -225,11 +244,36 @@ class BaseController(RequestHandler):
     def finish_with_json(self, data):
         """Turn data to JSON format before finish."""
         self.set_header('Content-Type', 'application/json')
+
         if O_O.debug:
-            dump_out(f'Output: {self.request.method} {self.request.path}',
-                     json.dumps(data))
+            if self.request.method == 'POST':
+                info_list = [
+                    f'\033[0mOutput: {self.request.method} {self.request.path}'
+                ]
+                if self.request.query:
+                    query_list = [
+                        f'\033[0;32m{i[0]:15s} {i[1]}'
+                        for i in parse.parse_qsl(self.request.query)
+                    ]
+                    info_list.append('\n' + '\n'.join(query_list))
+                if self.request.body:
+                    info_list.append('\n\033[0;32m' +
+                                     self.request.body.decode())
+                if data:
+                    info_list.append('\n\033[0;33m' + json.dumps(data))
+                dump_out(*info_list)
 
         raise Finish(json.dumps(data).encode())
+
+    def fail(self, status, data=None, polyfill=None, **_kwargs):
+        """assemble and return error data."""
+        msg = get_status_message(status)
+        self.finish_with_json(
+            dict(status=status, msg=msg, data=data, **_kwargs))
+
+    def success(self, data=None, msg='Successfully.', **_kwargs):
+        """assemble and return error data."""
+        self.finish_with_json(dict(status=0, msg=msg, data=data))
 
     async def wait(self, func, worker_mode=True, args=None, kwargs=None):
         """Method to waiting celery result."""

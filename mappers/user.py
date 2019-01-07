@@ -6,7 +6,7 @@ from database.sqlalchemy_models import User
 from .base_mapper import BaseMapper
 
 
-class UserQuery(BaseMapper):
+class UserMapper(BaseMapper):
     """User Query Factory."""
 
     def query_user_by_id(self, user_id, **kwargs):

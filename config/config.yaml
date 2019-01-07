@@ -1,40 +1,49 @@
 application:
-    template_path: thor/templates
-    static_path: static
-    cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
-    debug: true
-    autoreload: false
+  template_path: thor/templates
+  static_path: static
+  cookie_secret: QiNDQXm6peOfl1VOGhdLoZ0f3ZucyEg6psGNLu1tWZE=
+  debug: true
+  autoreload: false
+
+# ------ httpserver ------
 
 httpserver:
-    xheaders: true
+  xheaders: true
+
+# ------ server ------
 
 server:
-    domain: 'localhost'
-    port: 6789
-    expire_time: 3600
-    back_ip: '127.0.0.1'
-    pass_mixin: '0x00544'
-    cookie_name:
-        user_id: u_u
-        parameters: o_o
+  domain: "localhost"
+  port: 6789
+  expire_time: 3600
+  back_ip: "127.0.0.1"
+  pass_mixin: "0x00544"
+  cookie_name:
+    user_id: u_u
+    parameters: o_o
 
 worker:
-    mode: false
+  mode: false
+
+# ------ celery options ------
+# backend: "redis://:<passwd>@<host>:<port>/<db_num>"
+# broker: "pyamqp://<user_name>:<passwd>@<host>:<port>/<virtual_host>"
 
 celery:
-    backend: 'redis://:<passwd>@<host>:<port>/<db_num>'
-    broker: 'pyamqp://<user_name>:<passwd>@<host>:<port>/<virtual_host>'
-    sleep_time: 0.05
+  backend: "redis://"
+  broker: "pyamqp://"
+  sleep_time: 0.05
+
+# ------ database options ------
+# mysql: "<dialect>+<driver>://<username>:<password>@<host>:<port>/<database>"
+# client: "mongodb://<username>:<passwd>@<host>:<port>/<auth_db_name>"
+# db: "<db_name>"
 
 database:
-    sqlite: 'sqlite:///thor/lazor.db'
-    mysql: 'mysql+pymysql://plank:ridiculous@dev.machine:3306/lazor?charset=utf8'
-    mongo:
-        client: 'mongodb://<user_name>:<passwd>@<host>:<port>/<auth_db_name>'
-        db: '<db_name>'
-        session_key: user_id
+  mysql: "mysql+pymysql://plank:ridiculous@dev.machine:3306/lazor?charset=utf8"
+  mongo:
+    client: "mongodb://<username>:<passwd>@<host>:<port>/<auth_db_name>"
+    db: "test"
+    session_key: user_id
 
 debug: true
-
-enabled_modules:
-    - 'lazor'
