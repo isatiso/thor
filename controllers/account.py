@@ -17,9 +17,10 @@ class CreateAccount(BaseController):
     @check_auth
     async def post(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
+        print(self.parse_form_arguments())
         args = self.parse_json_arguments('username', 'phone', 'mail',
                                          'password')
-
+        print(args)
         res = create_account(args.username, args.phone, args.mail,
                              args.password)
         self.success(res)
