@@ -78,7 +78,7 @@ def check_auth(func):
         process(ctlr)
         func(ctlr, **kwargs)
 
-    if inspect.iscoroutinefunction(object):
+    if inspect.iscoroutinefunction(func):
         return async_wrapper
     else:
         return wrapper
@@ -144,19 +144,21 @@ class BaseController(RequestHandler):
             dump_in(f'Input: {self.request.method} {self.request.path}',
                     self.request.body.decode()[:500])
 
-        req = dict()
-        for key in enforced_keys:
-            req[key] = self.get_argument(key)
-        for key in optional_keys:
-            values = self.get_arguments(key)
-            if len(values) is 0:
-                req[key] = optional_keys.get(key)
-            elif len(values) is 1:
-                req[key] = values[0]
-            else:
-                req[key] = values
+        args = {k: v[0].decode() for k, v in self.request.arguments.items()}
 
-        return Arguments(req)
+        # req = dict()
+        # for key in enforced_keys:
+        #     req[key] = self.get_argument(key)
+        # for key in optional_keys:
+        #     values = self.get_arguments(key)
+        #     if len(values) is 0:
+        #         req[key] = optional_keys.get(key)
+        #     elif len(values) is 1:
+        #         req[key] = values[0]
+        #     else:
+        #         req[key] = values
+
+        return Arguments(args)
 
     def parse_json_arguments(self, *enforced_keys, **optional_keys):
         """Parse JSON argument like `get_argument`."""
@@ -172,12 +174,12 @@ class BaseController(RequestHandler):
 
         if not isinstance(req, dict):
             dump_error(self.request.body.decode())
-            raise ParseJSONError('Req should be a dictonary.')
+            raise ParseJSONError('Request body should be a dictonary.')
 
-        for key in enforced_keys:
-            if key not in req:
-                dump_error(self.request.body.decode())
-                raise MissingArgumentError(key)
+        # for key in enforced_keys:
+        #     if key not in req:
+        #         dump_error(self.request.body.decode())
+        #         raise MissingArgumentError(key)
 
         return Arguments(req)
 

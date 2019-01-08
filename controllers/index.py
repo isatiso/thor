@@ -15,9 +15,8 @@ class Index(BaseController):
 
     async def get(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
-        self.set_token(dict(a=1, b=23))
-        print(self.get_token())
-        print(self.request.headers)
+        # do something...
+        self.set_token(dict(timestamp=int(time.time()) + 3600))
         self.render('index.html')
 
 
@@ -33,17 +32,14 @@ class Test(BaseController):
     async def post(self, *_args, **_kwargs):
         """Test POST."""
         res = dict(method='POST', path=_kwargs.get('path'))
-        print(self.request.body[:200])
         self.finish_with_json(res)
 
     async def put(self, *_args, **_kwargs):
         """Test PUT."""
         res = dict(method='PUT', path=_kwargs.get('path'))
-        print(self.request.body[:200])
         self.finish_with_json(res)
 
     async def delete(self, *_args, **_kwargs):
         """Test DELETE."""
         res = dict(method='DELETE', path=_kwargs.get('path'))
-        print(self.request.body[:200])
         self.finish_with_json(res)
