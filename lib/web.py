@@ -138,7 +138,7 @@ class BaseController(RequestHandler):
         token = jwt.encode(token_params, O_O.server.token_secret)
         self.set_header(O_O.server.token_header or 'Thor-Token', token)
 
-    def parse_form_arguments(self):
+    def parse_form_arguments(self, *enforced_keys, **optional_keys):
         """Parse FORM argument like `get_argument`."""
         if O_O.debug:
             dump_in(f'Input: {self.request.method} {self.request.path}',
@@ -149,9 +149,21 @@ class BaseController(RequestHandler):
             for k, v in self.request.arguments.items() if v[0]
         }
 
+        # req = dict()
+        # for key in enforced_keys:
+        #     req[key] = self.get_argument(key)
+        # for key in optional_keys:
+        #     values = self.get_arguments(key)
+        #     if len(values) is 0:
+        #         req[key] = optional_keys.get(key)
+        #     elif len(values) is 1:
+        #         req[key] = values[0]
+        #     else:
+        #         req[key] = values
+
         return Arguments(args)
 
-    def parse_json_arguments(self):
+    def parse_json_arguments(self, *enforced_keys, **optional_keys):
         """Parse JSON argument like `get_argument`."""
         if O_O.debug:
             dump_in(f'Input: {self.request.method} {self.request.path}',
@@ -166,6 +178,11 @@ class BaseController(RequestHandler):
         if not isinstance(req, dict):
             dump_error(self.request.body.decode())
             raise ParseJSONError('Request body should be a dictonary.')
+
+        # for key in enforced_keys:
+        #     if key not in req:
+        #         dump_error(self.request.body.decode())
+        #         raise MissingArgumentError(key)
 
         return Arguments(req)
 
