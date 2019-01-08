@@ -5,9 +5,11 @@ import re
 import time
 import traceback
 import os
-
+from functools import wraps
 from urllib import parse
+import inspect
 
+import jwt
 from tornado import gen, httpclient
 from tornado.web import Finish, MissingArgumentError, RequestHandler, HTTPError
 from tornado.log import app_log, gen_log
@@ -17,6 +19,13 @@ from lib.entity import Arguments, ParseJSONError
 from lib.utils import dump_in, dump_out, dump_error
 
 ROUTES = []
+
+
+class TokenExpiredError(HTTPError):
+    """Token Expired Error."""
+
+    def __init__(self):
+        super(TokenExpiredError, self).__init__(400, 'Token Expired.')
 
 
 def route(path: str):
@@ -31,13 +40,48 @@ def route(path: str):
 
         realpath = path.strip('/')
         realpath = '/' + f'{filename}/{realpath}'.strip('/')
-
         ROUTES.append((realpath, handler))
-        print('loaded', realpath)
-
         return handler
 
     return wrapper
+
+
+def check_auth(func):
+    """Check user status."""
+
+    def process(ctlr):
+        token_params = Arguments(ctlr.get_token())
+        now = int(time.time())
+        if not token_params:
+            raise MissingArgumentError('unvalid token.')
+        if 'timestamp' not in token_params:
+            raise MissingArgumentError('no timestamp info in token.')
+        if token_params.timestamp < now:
+            raise TokenExpiredError()
+
+        params = dict()
+        params['token'] = token_params
+        params['device'] = ctlr.get_argument('device', 'web')
+        params['lang'] = ctlr.get_argument('lang', 'cn').lower()
+        params['remote_ip'] = ctlr.request.remote_ip
+        params['request_time'] = now
+
+        ctlr.params = Arguments(params)
+
+    @wraps(func)
+    async def async_wrapper(ctlr, **kwargs):
+        process(ctlr)
+        await func(ctlr, **kwargs)
+
+    @wraps(func)
+    def wrapper(ctlr, **kwargs):
+        process(ctlr)
+        func(ctlr, **kwargs)
+
+    if inspect.iscoroutinefunction(object):
+        return async_wrapper
+    else:
+        return wrapper
 
 
 class BaseController(RequestHandler):
@@ -82,115 +126,17 @@ class BaseController(RequestHandler):
     def prepare(self):
         self.set_header('Access-Control-Allow-Origin', '*')
 
-    def get_current_user(self):
-        """Get current user from cookie.
-        p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
-        user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
-        return user_id and user_id.decode()
-
-    def set_current_user(self, user_id=''):
-        """Set current user to cookie."""
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.user_id,
-            value=user_id,
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
-
-    # def get_parameters(self):
-    #     """Get user information from cookie."""
-    #     params = self.get_secure_cookie(O_O.server.cookie_name.parameters)
-    #     return Arguments(params and json.loads(params.decode()))
-
-    # def set_parameters(self, params=''):
-    #     """Set user information to the cookie."""
-    #     if not isinstance(params, dict):
-    #         raise ValueError('params should be <class \'dict\'>')
-    #     self.set_secure_cookie(
-    #         name=O_O.server.cookie_name.parameters,
-    #         value=json.dumps(params),
-    #         expires=time.time() + O_O.server.expire_time,
-    #         domain=self.request.host)
-
-    async def fetch(self,
-                    api,
-                    method='GET',
-                    body=None,
-                    headers=None,
-                    **_kwargs):
-        """Fetch Info from backend."""
-        body = body or dict()
-
-        _headers = dict(host=self.request.host)
-        if headers:
-            _headers.update(headers)
-
-        if '://' not in api:
-            api = f'http://{O_O.server.back_ip}{api}'
-
-        back_info = await httpclient.AsyncHTTPClient().fetch(
-            api,
-            method=method,
-            headers=_headers,
-            body=json.dumps(body),
-            raise_error=False,
-            allow_nonstandard_methods=True)
-
-        res_body = back_info.body and back_info.body.decode() or None
-
-        if back_info.code >= 400:
-            return Arguments(
-                dict(http_code=back_info.code, res_body=res_body, api=api))
-
+    def get_token(self):
+        header_name = O_O.server.token_header or 'Thor-Token'
+        token = self.request.headers.get(header_name)
         try:
-            return Arguments(json.loads(res_body))
-        except json.JSONDecodeError:
-            pass
+            return jwt.decode(token, O_O.server.token_secret)
+        except jwt.DecodeError:
+            return None
 
-    # @gen.coroutine
-    # def check_auth(self, **kwargs):
-    #     """Check user status."""
-
-    #     super_access = self.get_argument('super_access', '')
-    #     if super_access == '0x00544':
-    #         return Arguments(dict(super_access=super_access))
-
-    #     token = self.get_argument('token', '')
-    #     device = self.get_argument('device', 'web')
-    #     lang = self.get_argument('lang', 'cn').lower()
-
-    #     user_id = token_bar.get_token(token, device=device_num)
-    #     if not user_id:
-    #         self.fail(1001)
-    #     token_bar.set_token(token, user_id, xx=True, device=device_num)
-
-    #     params = yield self.get_user_info(user_id)
-
-    #     if not params:
-    #         self.fail(1001)
-    #     params['token'] = token
-    #     params['device'] = device_num
-    #     params['lang'] = lang
-
-    #     for key in kwargs:
-    #         if key not in params:
-    #             dump_error('Exception:\n', f'Auth Key Error: {key}')
-    #             self.fail(403, data=dict())
-
-    #         if not isinstance(kwargs[key], list):
-    #             if params[key] != kwargs[key]:
-    #                 dump_error('Exception:\n', f'Auth Key Error: {key}')
-    #                 self.fail(403, data=dict())
-    #         else:
-    #             operator = kwargs[key][0]
-    #             value = kwargs[key][1]
-
-    #             if not OPERATORS[operator](params[key], value):
-    #                 dump_error('Exception:\n', f'Auth Key Error: {key}')
-    #                 self.fail(400, data=dict())
-
-    #     result = Arguments(params)
-    #     self.params = result
-    #     return result
+    def set_token(self, token_params: dict = None):
+        token = jwt.encode(token_params, O_O.server.token_secret)
+        self.set_header(O_O.server.token_header or 'Thor-Token', token)
 
     def parse_form_arguments(self, *enforced_keys, **optional_keys):
         """Parse FORM argument like `get_argument`."""
@@ -209,9 +155,6 @@ class BaseController(RequestHandler):
                 req[key] = values[0]
             else:
                 req[key] = values
-
-        req['remote_ip'] = self.request.remote_ip
-        req['request_time'] = int(time.time())
 
         return Arguments(req)
 
@@ -235,9 +178,6 @@ class BaseController(RequestHandler):
             if key not in req:
                 dump_error(self.request.body.decode())
                 raise MissingArgumentError(key)
-
-        req['remote_ip'] = self.request.remote_ip
-        req['request_time'] = int(time.time())
 
         return Arguments(req)
 
@@ -302,3 +242,38 @@ class BaseController(RequestHandler):
                 return result
         else:
             return func(*args, **kwargs)
+
+    async def fetch(self,
+                    api,
+                    method='GET',
+                    body=None,
+                    headers=None,
+                    **_kwargs):
+        """Fetch Info from backend."""
+        body = body or dict()
+
+        _headers = dict(host=self.request.host)
+        if headers:
+            _headers.update(headers)
+
+        if '://' not in api:
+            api = f'http://{O_O.server.back_ip}{api}'
+
+        back_info = await httpclient.AsyncHTTPClient().fetch(
+            api,
+            method=method,
+            headers=_headers,
+            body=json.dumps(body),
+            raise_error=False,
+            allow_nonstandard_methods=True)
+
+        res_body = back_info.body and back_info.body.decode() or None
+
+        if back_info.code >= 400:
+            return Arguments(
+                dict(http_code=back_info.code, res_body=res_body, api=api))
+
+        try:
+            return Arguments(json.loads(res_body))
+        except json.JSONDecodeError:
+            pass

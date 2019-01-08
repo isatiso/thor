@@ -15,28 +15,28 @@ Base = declarative_base()
 
 class Addition:
 
-    # created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
-    # updated_at = Column(
-    #     TIMESTAMP,
-    #     server_default=text('CURRENT_TIMESTAMP  ON UPDATE CURRENT_TIMESTAMP'))
-    pass
-    # def to_dict(self, *options, **alias):
-    #     res = dict()
-    #     for key in options:
-    #         alias[key] = None
+    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=text('CURRENT_TIMESTAMP  ON UPDATE CURRENT_TIMESTAMP'))
 
-    #     for key in self.__dict__:
-    #         if not alias or key in alias:
-    #             if not key.startswith('_'):
-    #                 if isinstance(alias.get(key), str):
-    #                     real_key = alias[key]
-    #                 else:
-    #                     real_key = key
-    #                 if isinstance(self.__dict__[key], enum.Enum):
-    #                     res[real_key] = self.__dict__[key].name
-    #                 elif isinstance(self.__dict__[key], datetime):
-    #                     res[real_key] = int(self.__dict__[key].timestamp())
-    #                 else:
-    #                     res[real_key] = self.__dict__[key]
+    def to_dict(self, *options, **alias):
+        res = dict()
+        for key in options:
+            alias[key] = None
 
-    #     return res
+        for key in self.__dict__:
+            if not alias or key in alias:
+                if not key.startswith('_'):
+                    if isinstance(alias.get(key), str):
+                        real_key = alias[key]
+                    else:
+                        real_key = key
+                    if isinstance(self.__dict__[key], enum.Enum):
+                        res[real_key] = self.__dict__[key].name
+                    elif isinstance(self.__dict__[key], datetime):
+                        res[real_key] = int(self.__dict__[key].timestamp())
+                    else:
+                        res[real_key] = self.__dict__[key]
+
+        return res

@@ -1,3 +1,5 @@
+# thor configuration
+
 application:
   template_path: thor/templates
   static_path: static
@@ -18,9 +20,14 @@ server:
   expire_time: 3600
   back_ip: "127.0.0.1"
   pass_mixin: "0x00544"
+  token_secret: "thor-secret"
+  token_header: "Thor-Token"
   cookie_name:
     user_id: u_u
     parameters: o_o
+
+# ------ worker mode ------
+# use celery or call the method directly.
 
 worker:
   mode: false
@@ -30,20 +37,34 @@ worker:
 # broker: "pyamqp://<user_name>:<passwd>@<host>:<port>/<virtual_host>"
 
 celery:
-  backend: "redis://"
-  broker: "pyamqp://"
+  backend: "redis://:lkejflakejflakehjgklaehgioueayhghlakehglkaejhfdjaelkjgfh@dev.machine:9376/15"
+  broker: "pyamqp://plank:ridiculous@dev.machine:5672/lazor"
   sleep_time: 0.05
 
+cache:
+  redis:
+    host: "dev.machine"
+    port: 9376
+    passwd: "lkejflakejflakehjgklaehgioueayhghlakehglkaejhfdjaelkjgfh"
+
 # ------ database options ------
+
 # mysql: "<dialect>+<driver>://<username>:<password>@<host>:<port>/<database>"
-# client: "mongodb://<username>:<passwd>@<host>:<port>/<auth_db_name>"
+# client: "mongodb://<username>:<password>@<host>:<port>/<auth_db_name>"
 # db: "<db_name>"
 
 database:
   mysql: "mysql+pymysql://plank:ridiculous@dev.machine:3306/lazor?charset=utf8"
   mongo:
-    client: "mongodb://<username>:<passwd>@<host>:<port>/<auth_db_name>"
-    db: "test"
-    session_key: user_id
+    client: "mongodb://plank:ridiculous@dev.machine:3306/admin"
+    db: "lazor"
+
+# ------ debug ------
+# log all message if debug is true.
 
 debug: true
+
+# ------ mail ------
+
+mail:
+  mailgun: false

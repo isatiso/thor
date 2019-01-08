@@ -10,7 +10,7 @@ from lib.utils.logger import dump_in, dump_out, dump_error
 from config import CFG as O_O, _ENV as env
 
 DB_ENGINE = create_engine(
-    O_O.database.sqlite, echo=False, pool_recycle=1000, encoding='utf-8')
+    O_O.database.mysql, echo=False, pool_recycle=1000, encoding='utf-8')
 
 SESS = sessionmaker(bind=DB_ENGINE)
 

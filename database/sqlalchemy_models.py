@@ -26,6 +26,8 @@ class User(Base, Addition):
     is_super = Column(SmallInteger, server_default=text('0'))
     active = Column(SmallInteger, server_default=text('0'))
 
+    deleted = Column(SmallInteger, server_default=text('0'))
+
     __table_args__ = (
         PrimaryKeyConstraint('user_id'),
         {

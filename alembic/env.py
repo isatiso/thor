@@ -10,7 +10,7 @@ from logging.config import fileConfig
 config = context.config
 config.set_main_option(
     "sqlalchemy.url",
-    "sqlite:///lazor.db")
+    "mysql+pymysql://plank:ridiculous@dev.machine:3306/lazor?charset=utf8")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

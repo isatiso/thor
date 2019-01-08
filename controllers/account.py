@@ -6,7 +6,7 @@ from tornado import gen
 from tornado.options import define
 
 from config import CFG as O_O
-from lib.web import BaseController, route
+from lib.web import BaseController, route, check_auth
 from services.user_service import create_account, get_account_info
 
 
@@ -14,6 +14,7 @@ from services.user_service import create_account, get_account_info
 class CreateAccount(BaseController):
     """Test index request handler."""
 
+    @check_auth
     async def post(self, *_args, **_kwargs):
         """Get method of IndexHandler."""
         args = self.parse_json_arguments('username', 'phone', 'mail',
