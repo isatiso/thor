@@ -49,8 +49,9 @@ class Config(Arguments):
 
 
 CFG = None
+CONFIG_PATH = os.path.join(sys.path[0], 'config/config.yaml')
 try:
-    with open('thor/config/config.yaml', 'r', encoding='utf-8') as config:
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as config:
         CFG = Config(yaml.load(config))
 except FileNotFoundError:
     CFG = Config(dict(error='Config File Not Found.'))

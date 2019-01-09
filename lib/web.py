@@ -5,24 +5,33 @@ import re
 import time
 import traceback
 import os
+from functools import wraps
+from urllib import parse
+import inspect
 
+import jwt
 from tornado import gen, httpclient
-from tornado.web import Finish, MissingArgumentError, RequestHandler
-from config import get_status_message, CFG as O_O
-from lib.arguments import Arguments
-from lib.errors import ParseJSONError
-from lib.logger import dump_in, dump_out, dump_error
+from tornado.web import Finish, MissingArgumentError, RequestHandler, HTTPError
+from tornado.log import app_log, gen_log
 
-ENFORCED = True
-OPTIONAL = False
+from config import get_status_message, CFG as O_O
+from lib.entity import Arguments, ParseJSONError
+from lib.utils import dump_in, dump_out, dump_error
 
 ROUTES = []
+
+
+class TokenExpiredError(HTTPError):
+    """Token Expired Error."""
+
+    def __init__(self):
+        super(TokenExpiredError, self).__init__(400, 'Token Expired.')
 
 
 def route(path: str):
     def wrapper(handler: RequestHandler):
         if not issubclass(handler, RequestHandler):
-            raise PermissionError('Cant routing a nonhandler class.')
+            raise PermissionError('Can\'t routing a nonhandler class.')
 
         filename = traceback.extract_stack(limit=2)[0].filename
         filename = os.path.basename(filename)
@@ -31,12 +40,48 @@ def route(path: str):
 
         realpath = path.strip('/')
         realpath = '/' + f'{filename}/{realpath}'.strip('/')
-
         ROUTES.append((realpath, handler))
-
         return handler
 
     return wrapper
+
+
+def check_auth(func):
+    """Check user status."""
+
+    def process(ctlr):
+        token_params = Arguments(ctlr.get_token())
+        now = int(time.time())
+        if not token_params:
+            raise MissingArgumentError('unvalid token.')
+        if 'timestamp' not in token_params:
+            raise MissingArgumentError('no timestamp info in token.')
+        if token_params.timestamp < now:
+            raise TokenExpiredError()
+
+        params = dict()
+        params['token'] = token_params
+        params['device'] = ctlr.get_argument('device', 'web')
+        params['lang'] = ctlr.get_argument('lang', 'cn').lower()
+        params['remote_ip'] = ctlr.request.remote_ip
+        params['request_time'] = now
+
+        ctlr.params = Arguments(params)
+
+    @wraps(func)
+    async def async_wrapper(ctlr, **kwargs):
+        process(ctlr)
+        await func(ctlr, **kwargs)
+
+    @wraps(func)
+    def wrapper(ctlr, **kwargs):
+        process(ctlr)
+        func(ctlr, **kwargs)
+
+    if inspect.iscoroutinefunction(func):
+        return async_wrapper
+    else:
+        return wrapper
 
 
 class BaseController(RequestHandler):
@@ -46,34 +91,124 @@ class BaseController(RequestHandler):
         super(BaseController, self).__init__(application, request, **kwargs)
         self.params = None
 
-    def get_current_user(self):
-        """Get current user from cookie.
-        p.s. self.get_secure_cookie 方法只会返回 None 或者 bytes."""
-        user_id = self.get_secure_cookie(O_O.server.cookie_name.user_id)
-        return user_id and user_id.decode()
+    def _request_summary(self):
+        s = ' '
+        return f'{self.request.method.rjust(6, s)} {self.request.remote_ip.rjust(15, s)}  {self.request.path} '
 
-    def set_current_user(self, user_id=''):
-        """Set current user to cookie."""
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.user_id,
-            value=user_id,
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
+    def log_exception(self, typ, value, tb):
+        """Override to customize logging of uncaught exceptions.
 
-    def get_parameters(self):
-        """Get user information from cookie."""
-        params = self.get_secure_cookie(O_O.server.cookie_name.parameters)
-        return Arguments(params and json.loads(params.decode()))
+        By default logs instances of `HTTPError` as warnings without
+        stack traces (on the ``tornado.general`` logger), and all
+        other exceptions as errors with stack traces (on the
+        ``tornado.application`` logger).
 
-    def set_parameters(self, params=''):
-        """Set user information to the cookie."""
-        if not isinstance(params, dict):
-            raise ValueError('params should be <class \'dict\'>')
-        self.set_secure_cookie(
-            name=O_O.server.cookie_name.parameters,
-            value=json.dumps(params),
-            expires=time.time() + O_O.server.expire_time,
-            domain=self.request.host)
+        .. versionadded:: 3.1
+        """
+        if isinstance(value, HTTPError):
+            if value.log_message:
+                # format = "%d %s: " + value.log_message
+                # args = ([value.status_code,
+                #          self._request_summary()] + list(value.args))
+                gen_log.warning('\033[0;31m' + value.log_message + '\033[0m')
+        else:
+            app_log.error(
+                "Uncaught exception %s\n%r",
+                self._request_summary(),
+                self.request,
+                exc_info=(typ, value, tb))
+
+    async def options(self, *_args, **_kwargs):
+        self.set_header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE')
+        self.set_header('Access-Control-Allow-Headers', 'Authorization')
+        self.success()
+
+    def prepare(self):
+        self.set_header('Access-Control-Allow-Origin', '*')
+
+    def get_token(self):
+        header_name = O_O.server.token_header or 'Thor-Token'
+        token = self.request.headers.get(header_name)
+        try:
+            return jwt.decode(token, O_O.server.token_secret)
+        except jwt.DecodeError:
+            return None
+
+    def set_token(self, token_params: dict = None):
+        token = jwt.encode(token_params, O_O.server.token_secret)
+        self.set_header(O_O.server.token_header or 'Thor-Token', token)
+
+    def parse_form_arguments(self, *enforced_keys, **optional_keys):
+        """Parse FORM argument like `get_argument`."""
+        if O_O.debug:
+            dump_in(f'Input: {self.request.method} {self.request.path}',
+                    self.request.body.decode()[:500])
+
+        args = {
+            k: v[0].decode()
+            for k, v in self.request.arguments.items() if v[0]
+        }
+
+        # req = dict()
+        # for key in enforced_keys:
+        #     req[key] = self.get_argument(key)
+        # for key in optional_keys:
+        #     values = self.get_arguments(key)
+        #     if len(values) is 0:
+        #         req[key] = optional_keys.get(key)
+        #     elif len(values) is 1:
+        #         req[key] = values[0]
+        #     else:
+        #         req[key] = values
+
+        return Arguments(args)
+
+    def parse_json_arguments(self, *enforced_keys, **optional_keys):
+        """Parse JSON argument like `get_argument`."""
+        if O_O.debug:
+            dump_in(f'Input: {self.request.method} {self.request.path}',
+                    self.request.body.decode()[:500])
+
+        try:
+            req = json.loads(self.request.body.decode('utf-8'))
+        except json.JSONDecodeError as exception:
+            dump_error(self.request.body.decode())
+            raise ParseJSONError(exception.doc)
+
+        if not isinstance(req, dict):
+            dump_error(self.request.body.decode())
+            raise ParseJSONError('Request body should be a dictonary.')
+
+        # for key in enforced_keys:
+        #     if key not in req:
+        #         dump_error(self.request.body.decode())
+        #         raise MissingArgumentError(key)
+
+        return Arguments(req)
+
+    def finish_with_json(self, data):
+        """Turn data to JSON format before finish."""
+        self.set_header('Content-Type', 'application/json')
+
+        if O_O.debug:
+            if self.request.method == 'POST':
+                info_list = [
+                    f'\033[0mOutput: {self.request.method} {self.request.path}'
+                ]
+                if self.request.query:
+                    query_list = [
+                        f'\033[0;32m{i[0]:15s} {i[1]}'
+                        for i in parse.parse_qsl(self.request.query)
+                    ]
+                    info_list.append('\n' + '\n'.join(query_list))
+                if self.request.body:
+                    info_list.append('\n\033[0;32m' +
+                                     self.request.body.decode())
+                if data:
+                    info_list.append('\n\033[0;33m' + json.dumps(data))
+                dump_out(*info_list)
+
+        raise Finish(json.dumps(data).encode())
 
     def fail(self, status, data=None, polyfill=None, **_kwargs):
         """assemble and return error data."""
@@ -81,9 +216,37 @@ class BaseController(RequestHandler):
         self.finish_with_json(
             dict(status=status, msg=msg, data=data, **_kwargs))
 
-    def success(self, msg='Successfully.', data=None, **_kwargs):
+    def success(self, data=None, msg='Successfully.', **_kwargs):
         """assemble and return error data."""
         self.finish_with_json(dict(status=0, msg=msg, data=data))
+
+    async def wait(self, func, worker_mode=True, args=None, kwargs=None):
+        """Method to waiting celery result."""
+        if worker_mode:
+            async_task = func.apply_async(args=args, kwargs=kwargs)
+
+            while True:
+                if async_task.status in ['PENDING', 'PROGRESS']:
+                    await gen.sleep(O_O.celery.sleep_time)
+                elif async_task.status in ['SUCCESS', 'FAILURE']:
+                    break
+                else:
+                    print('\n\nUnknown status:\n', async_task.status, '\n\n\n')
+                    break
+
+            if async_task.status != 'SUCCESS':
+                dump_error(f'Task Failed: {func.name}[{async_task.task_id}]',
+                           f'    {str(async_task.result)}')
+                result = dict(status=1, data=async_task.result)
+            else:
+                result = async_task.result
+
+            if result.get('status'):
+                self.fail(-1, result)
+            else:
+                return result
+        else:
+            return func(*args, **kwargs)
 
     async def fetch(self,
                     api,
@@ -119,114 +282,3 @@ class BaseController(RequestHandler):
             return Arguments(json.loads(res_body))
         except json.JSONDecodeError:
             pass
-
-    async def check_auth(self, **kwargs):
-        """Check user status."""
-        user_id = self.get_current_user()
-        params = self.get_parameters()
-
-        def clean_and_fail(code):
-            self.set_current_user('')
-            self.set_parameters({})
-            self.fail(code)
-
-        if not user_id or not params:
-            clean_and_fail(3005)
-
-        if user_id != params.user_id:
-            clean_and_fail(3006)
-
-        for key in kwargs:
-            if params[key] != kwargs[key]:
-                dump_error(f'Auth Key Error: {key}')
-                self.fail(4003)
-
-        self.set_current_user(self.get_current_user())
-        self.set_parameters(self.get_parameters())
-        return params
-
-    def parse_form_arguments(self, *enforced_keys, **optional_keys):
-        """Parse FORM argument like `get_argument`."""
-        if O_O.debug:
-            dump_in(f'Input: {self.request.method} {self.request.path}',
-                    self.request.body.decode()[:500])
-
-        req = dict()
-        for key in enforced_keys:
-            req[key] = self.get_argument(key)
-        for key in optional_keys:
-            values = self.get_arguments(key)
-            if len(values) is 0:
-                req[key] = optional_keys.get(key)
-            elif len(values) is 1:
-                req[key] = values[0]
-            else:
-                req[key] = values
-
-        req['remote_ip'] = self.request.remote_ip
-        req['request_time'] = int(time.time())
-
-        return Arguments(req)
-
-    def parse_json_arguments(self, *enforced_keys, **optional_keys):
-        """Parse JSON argument like `get_argument`."""
-        if O_O.debug:
-            dump_in(f'Input: {self.request.method} {self.request.path}',
-                    self.request.body.decode()[:500])
-
-        try:
-            req = json.loads(self.request.body.decode('utf-8'))
-        except json.JSONDecodeError as exception:
-            dump_error(self.request.body.decode())
-            raise ParseJSONError(exception.doc)
-
-        if not isinstance(req, dict):
-            dump_error(self.request.body.decode())
-            raise ParseJSONError('Req should be a dictonary.')
-
-        for key in enforced_keys:
-            if key not in req:
-                dump_error(self.request.body.decode())
-                raise MissingArgumentError(key)
-
-        req['remote_ip'] = self.request.remote_ip
-        req['request_time'] = int(time.time())
-
-        return Arguments(req)
-
-    def finish_with_json(self, data):
-        """Turn data to JSON format before finish."""
-        self.set_header('Content-Type', 'application/json')
-        if O_O.debug:
-            dump_out(f'Output: {self.request.method} {self.request.path}',
-                     json.dumps(data))
-
-        raise Finish(json.dumps(data).encode())
-
-    async def wait(self, func, worker_mode=True, args=None, kwargs=None):
-        """Method to waiting celery result."""
-        if worker_mode:
-            async_task = func.apply_async(args=args, kwargs=kwargs)
-
-            while True:
-                if async_task.status in ['PENDING', 'PROGRESS']:
-                    await gen.sleep(O_O.celery.sleep_time)
-                elif async_task.status in ['SUCCESS', 'FAILURE']:
-                    break
-                else:
-                    print('\n\nUnknown status:\n', async_task.status, '\n\n\n')
-                    break
-
-            if async_task.status != 'SUCCESS':
-                dump_error(f'Task Failed: {func.name}[{async_task.task_id}]',
-                           f'    {str(async_task.result)}')
-                result = dict(status=1, data=async_task.result)
-            else:
-                result = async_task.result
-
-            if result.get('status'):
-                self.fail(-1, result)
-            else:
-                return result
-        else:
-            return func(*args, **kwargs)
